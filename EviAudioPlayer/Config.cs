@@ -16,40 +16,28 @@ public class Config : IConfig
     [Description("Print verbose debug messages to the server console. Disable in production.")]
     public bool Debug { get; set; } = false;
 
-    [Description(
-        "Remote admin command names. First entry is primary, rest are aliases.\n" +
-        "  Example: ['audio', 'au', 'music']")]
+    [Description("Remote admin command names. First entry is primary, rest are aliases. Example: ['audio', 'au', 'music']")]
     public string[] CommandName { get; set; } = ["audio", "au"];
 
-    [Description(
-        "Automatically spawn bots listed in BotsList when the map generates.\n" +
-        "  If false, spawn manually with: audio add <id>")]
+    [Description("Automatically spawn bots listed in BotsList when the map generates. If false, spawn manually with: audio add <id>")]
     public bool SpawnBot { get; set; } = false;
 
-    [Description(
-        "Bots auto-spawned when SpawnBot is true.\n" +
-        "  BotId 99 is the default command target.\n" +
-        "  Multiple bots with different IDs can serve different purposes.\n" +
-        "  Audio tracks stored in: EXILED/Plugins/EviAudio/tracks/")]
+    [Description(@"Bots auto-spawned when SpawnBot is true.
+BotId 99 is the default command target.
+Multiple bots with different IDs can serve different purposes.
+Audio tracks stored in: EXILED/Plugins/EviAudio/tracks/")]
     public List<BotsList> BotsList { get; set; } =
     [
         new() { BotName = "EviAudio Bot", BotId = 99, BadgeText = "Music Bot", BadgeColor = "blue" }
     ];
 
-    [Description(
-        "Enable event-driven audio: lobby music, round start/end, MTF/Chaos spawns,\n" +
-        "  warhead sounds, kill/death sounds, join sounds.\n" +
-        "  All clip lists below are only active when this is true.")]
+    [Description("Enable event-driven audio: lobby music, round start/end, MTF/Chaos spawns, warhead sounds, kill/death sounds, join sounds. All clip lists below are only active when this is true.")]
     public bool SpecialEventsEnable { get; set; } = false;
 
-    [Description(
-        "Seconds to wait after round start before any event-driven sound plays.\n" +
-        "  Useful to avoid overlap with SCP reveal lines. Set to 0 to disable.")]
+    [Description("Seconds to wait after round start before any event-driven sound plays. Useful to avoid overlap with SCP reveal lines. Set to 0 to disable.")]
     public float RoundStartGraceDelay { get; set; } = 0f;
 
-    [Description(
-        "Playlist during lobby. A random entry is picked each time a track ends.\n" +
-        "  Requires SpecialEventsEnable: true. Leave empty to disable.")]
+    [Description("Playlist during lobby. A random entry is picked each time a track ends. Requires SpecialEventsEnable: true. Leave empty to disable.")]
     public List<AudioFile> LobbyPlaylist { get; set; } = [];
 
     [Description("Played once when the round starts. Leave empty to disable.")]
@@ -97,21 +85,21 @@ public class Config : IConfig
     [Description("Played privately to a player when they first connect to the server.")]
     public List<AudioFile> PlayerConnectedServer { get; set; } = [];
 
-    [Description(
-        "Audio scene presets — named collections of SpatialAudioPlayers spawned across the map.\n" +
-        "  Activate with: audio scene activate <PresetName>\n" +
-        "  Deactivate with: audio scene deactivate <PresetName>\n" +
-        "  List all with: audio scene list\n\n" +
-        "  Speaker options:\n" +
-        "    file: path relative to EviAudio/tracks/ or absolute\n" +
-        "    volume: 0-100\n" +
-        "    loop: true/false\n" +
-        "    min_distance / max_distance: audible range in Unity units\n" +
-        "    lifetime: seconds until auto-destroy (0 = permanent)\n" +
-        "    pitch_shift: semitones (+12 = octave up, -12 = octave down, 0 = normal)\n" +
-        "    position: explicit world coords {x, y, z}\n" +
-        "    spawn_in_room: EXILED RoomType name — spawns in every matching room\n" +
-        "    spawn_in_zone: ZoneType name — spawns in every room of that zone")]
+    [Description(@"Audio scene presets — named collections of SpatialAudioPlayers spawned across the map.
+Activate with: audio scene activate <PresetName>
+Deactivate with: audio scene deactivate <PresetName>
+List all with: audio scene list
+
+Speaker options:
+  file: path relative to EviAudio/tracks/ or absolute
+  volume: 0-100
+  loop: true/false
+  min_distance / max_distance: audible range in Unity units
+  lifetime: seconds until auto-destroy (0 = permanent)
+  pitch_shift: semitones (+12 = octave up, -12 = octave down, 0 = normal)
+  position: explicit world coords {x, y, z}
+  spawn_in_room: EXILED RoomType name — spawns in every matching room
+  spawn_in_zone: ZoneType name — spawns in every room of that zone")]
     public List<AudioPreset> AudioPresets { get; set; } =
     [
         new AudioPreset
@@ -177,29 +165,28 @@ public class Config : IConfig
         }
     ];
 
-    [Description(
-        "Enable per-room ambient sounds and room-entry trigger sounds.\n" +
-        "  Ambient speakers use SpatialAudioPlayer (true 3D positional audio).\n" +
-        "  Trigger sounds play privately to the player who enters the room via a bot.")]
+    [Description("Enable per-room ambient sounds and room-entry trigger sounds.\nAmbient speakers use SpatialAudioPlayer (true 3D positional audio).\nTrigger sounds play privately to the player who enters the room via a bot.")]
     public bool EnableAudioZones { get; set; } = false;
 
-    [Description(
-        "Per-room audio zone configuration list.\n\n" +
-        "  Targeting:\n" +
-        "    room_type: EXILED RoomType enum (e.g. Lcz173, HczArmory, EzGateA)\n" +
-        "    ambient_zone: ZoneType name (LightContainment, HeavyContainment, Entrance, Surface)\n\n" +
-        "  Ambient speaker (3D spatial audio looped at room center):\n" +
-        "    ambient_file: audio file path (empty = disabled)\n" +
-        "    ambient_volume: 0.0-1.0\n" +
-        "    ambient_min_distance / ambient_max_distance: audible range\n" +
-        "    ambient_pitch_shift: pitch in semitones\n\n" +
-        "  Trigger sound (played privately to entering player):\n" +
-        "    trigger_file: audio file path (empty = disabled)\n" +
-        "    trigger_bot_id: which bot delivers the sound\n" +
-        "    trigger_channel: VoiceChatChannel (Proximity, Intercom, Radio...)\n" +
-        "    trigger_volume: 0-100\n" +
-        "    trigger_loop: loop the trigger sound\n" +
-        "    trigger_once_per_round: play only once per player per round")]
+    [Description(@"Per-room audio zone configuration list.
+
+Targeting:
+  room_type: EXILED RoomType enum (e.g. Lcz173, HczArmory, EzGateA)
+  ambient_zone: ZoneType name (LightContainment, HeavyContainment, Entrance, Surface)
+
+Ambient speaker (3D spatial audio looped at room center):
+  ambient_file: audio file path (empty = disabled)
+  ambient_volume: 0.0-1.0
+  ambient_min_distance / ambient_max_distance: audible range
+  ambient_pitch_shift: pitch in semitones
+
+Trigger sound (played privately to entering player):
+  trigger_file: audio file path (empty = disabled)
+  trigger_bot_id: which bot delivers the sound
+  trigger_channel: VoiceChatChannel (Proximity, Intercom, Radio...)
+  trigger_volume: 0-100
+  trigger_loop: loop the trigger sound
+  trigger_once_per_round: play only once per player per round")]
     public List<AudioZoneConfig> AudioZones { get; set; } =
     [
         new AudioZoneConfig
@@ -222,9 +209,7 @@ public class Config : IConfig
         }
     ];
 
-    [Description(
-        "Automatically reduce all bot volumes when CASSIE makes an announcement, then restore them.\n" +
-        "  Prevents music from drowning out important in-game announcements.")]
+    [Description("Automatically reduce all bot volumes when CASSIE makes an announcement, then restore them. Prevents music from drowning out important in-game announcements.")]
     public bool EnableCassieDucking { get; set; } = false;
 
     [Description("Volume percentage (0-100) bots are reduced to during a CASSIE announcement.")]
@@ -236,24 +221,16 @@ public class Config : IConfig
     [Description("Seconds to fade bot volume back up after CASSIE finishes.")]
     public float CassieDuckFadeOut { get; set; } = 0.8f;
 
-    [Description(
-        "Only duck bots broadcasting on these voice channels.\n" +
-        "  Leave empty to duck ALL bots regardless of channel.\n" +
-        "  Valid values: Intercom, Radio, Proximity, etc.")]
+    [Description("Only duck bots broadcasting on these voice channels. Leave empty to duck ALL bots regardless of channel. Valid values: Intercom, Radio, Proximity, etc.")]
     public List<string> CassieDuckChannels { get; set; } = [];
 
-    [Description(
-        "Enable the speaker radius visualizer.\n" +
-        "  'audio visualize' shows admin-toy spheres representing min/max speaker ranges.\n" +
-        "  Green sphere = min distance, blue sphere = max distance.")]
+    [Description("Enable the speaker radius visualizer. 'audio visualize' shows admin-toy spheres representing min/max speaker ranges.\nGreen sphere = min distance, blue sphere = max distance.")]
     public bool EnableSpeakerVisualizer { get; set; } = true;
 
     [Description("Default seconds the visualizer spheres remain visible.")]
     public float VisualizerDuration { get; set; } = 5f;
 
-    [Description(
-        "Default volume for SpeakerToy objects spawned via 'audio speaker spawn'.\n" +
-        "  Range 0.0-1.0.")]
+    [Description("Default volume for SpeakerToy objects spawned via 'audio speaker spawn'. Range 0.0-1.0.")]
     public float DefaultSpeakerVolume { get; set; } = 1f;
 
     [Description("Default minimum audible distance for SpeakerToy objects spawned via command.")]
@@ -265,35 +242,21 @@ public class Config : IConfig
     [Description("Default pitch shift in semitones for SpeakerToy objects spawned via command. 0 = normal.")]
     public float DefaultSpeakerPitchShift { get; set; } = 0f;
 
-    [Description(
-        "Permission node prefix used by all EviAudio commands.\n" +
-        "  Each subcommand requires: <PermissionPrefix>.<commandname>\n" +
-        "  Example: 'audioplayer.play', 'audioplayer.scene', 'audioplayer.speaker'")]
+    [Description("Permission node prefix used by all EviAudio commands.\nEach subcommand requires: <PermissionPrefix>.<commandname>\nExample: 'audioplayer.play', 'audioplayer.scene', 'audioplayer.speaker'")]
     public string PermissionPrefix { get; set; } = "audioplayer";
 
-    [Description(
-        "Maximum volume any command or config entry can set on a bot.\n" +
-        "  Server-wide ceiling. Range 0-100.")]
+    [Description("Maximum volume any command or config entry can set on a bot. Server-wide ceiling. Range 0-100.")]
     public float MaxVolumeCap { get; set; } = 100f;
 
-    [Description(
-        "Maximum number of simultaneously active SpatialAudioPlayers.\n" +
-        "  Prevents accidental resource exhaustion from scene or speaker commands.\n" +
-        "  0 = no limit.")]
+    [Description("Maximum number of simultaneously active SpatialAudioPlayers. Prevents accidental resource exhaustion from scene or speaker commands. 0 = no limit.")]
     public int MaxActiveSpeakers { get; set; } = 64;
 
-    [Description(
-        "If true, log each track start/stop to the server console at Info level.\n" +
-        "  Useful for event logging. More verbose than Debug mode.")]
+    [Description("If true, log each track start/stop to the server console at Info level. Useful for event logging. More verbose than Debug mode.")]
     public bool LogPlayback { get; set; } = false;
 
-    [Description(
-        "If true, SpeakerToy objects spawned via 'audio speaker spawn' default to spatial (3D) mode.\n" +
-        "  Can be overridden per-speaker with 'audio speaker spatial <id> false'.")]
+    [Description("If true, SpeakerToy objects spawned via 'audio speaker spawn' default to spatial (3D) mode. Can be overridden per-speaker with 'audio speaker spatial <id> false'.")]
     public bool DefaultSpeakerSpatial { get; set; } = true;
 
-    [Description(
-        "Default lifetime in seconds for SpeakerToy objects spawned via command.\n" +
-        "  0 = permanent until manually destroyed.")]
+    [Description("Default lifetime in seconds for SpeakerToy objects spawned via command. 0 = permanent until manually destroyed.")]
     public float DefaultSpeakerLifetime { get; set; } = 0f;
 }
