@@ -3,7 +3,7 @@
 An EXILED plugin that turns SCP:SL into a schizophrenic radio station with spatial audio, music bots, ambient zones, event sounds, scene presets and enough noise pollution to make CASSIE file a lawsuit.
 Made because normal silent servers feel like abandoned parking garages.
 
-Needs EXILED. Lol.
+Needs EXILED. Lol. And NVorbis.
 
 ## What does this thing even do
 
