@@ -268,9 +268,8 @@ Because silence in that room is somehow worse.
 
 ## Dependencies
 
-* entity["company","EXILED","EXILED Framework"]
-* Unity audio not exploding
-* Your players tolerating the noise
+* Exiled
+* NVorbis
 
 ## Known Issues
 
