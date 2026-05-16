@@ -51,7 +51,7 @@ FFmpeg handles every audio format known to mankind. Without it you're limited to
 
 4. For YouTube / SoundCloud / Twitch — drop `yt-dlp.exe` (Windows) or `yt-dlp` (Linux) into the same folder:
 ```
-EXILED/Plugins/EviAudio/ffmpeg/
+EXILED/Plugins/EviAudio/
 ```
 
 Single binary, no install, no setup. [github.com/yt-dlp/yt-dlp/releases](https://github.com/yt-dlp/yt-dlp/releases). yt-dlp gets the real audio URL, FFmpeg streams it. Nothing touches your disk. Your server stays clean.
