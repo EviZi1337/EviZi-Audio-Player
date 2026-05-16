@@ -3,6 +3,7 @@ using EviAudio.Other;
 using Exiled.API.Features;
 using Exiled.API.Enums;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,7 +13,7 @@ namespace EviAudio.API.Preset;
 
 public static class SceneManager
 {
-    private static readonly Dictionary<string, List<SpatialAudioPlayer>> _activeScenes = new();
+    private static readonly ConcurrentDictionary<string, List<SpatialAudioPlayer>> _activeScenes = new();
 
     public static IReadOnlyDictionary<string, List<SpatialAudioPlayer>> ActiveScenes => _activeScenes;
 
@@ -66,9 +67,9 @@ public static class SceneManager
             return (false, $"Scene '{presetName}' is not active.");
 
         foreach (var player in players)
-            try { UnityEngine.Object.Destroy(player.gameObject); } catch { }
+            try { player.DestroySelf(); } catch { }
 
-        _activeScenes.Remove(presetName);
+        _activeScenes.TryRemove(presetName, out _);
         return (true, $"Scene '{presetName}' deactivated. {players.Count} speaker(s) removed.");
     }
 
@@ -76,7 +77,7 @@ public static class SceneManager
     {
         foreach (var kvp in _activeScenes)
             foreach (var player in kvp.Value)
-                try { UnityEngine.Object.Destroy(player.gameObject); } catch { }
+                try { player.DestroySelf(); } catch { }
 
         _activeScenes.Clear();
     }

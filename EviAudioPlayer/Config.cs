@@ -248,8 +248,17 @@ Trigger sound (played privately to entering player):
     [Description("Maximum volume any command or config entry can set on a bot. Server-wide ceiling. Range 0-100.")]
     public float MaxVolumeCap { get; set; } = 100f;
 
+    [Description("Decoded PCM cache memory limit in megabytes. Older tracks are evicted automatically when this limit is exceeded.")]
+    public int AudioCacheMaxMegabytes { get; set; } = 512;
+
+    [Description("Maximum audio packets a bot or spatial speaker may send in one server frame after lag. Prevents CPU spikes when the server tries to catch up.")]
+    public int MaxAudioPacketsPerFrame { get; set; } = 5;
+
     [Description("Maximum number of simultaneously active SpatialAudioPlayers. Prevents accidental resource exhaustion from scene or speaker commands. 0 = no limit.")]
     public int MaxActiveSpeakers { get; set; } = 64;
+
+    [Description("Maximum ambient speakers one AudioZone entry may spawn across matching rooms. 0 = no per-zone limit.")]
+    public int MaxAmbientSpeakersPerZone { get; set; } = 16;
 
     [Description("If true, log each track start/stop to the server console at Info level. Useful for event logging. More verbose than Debug mode.")]
     public bool LogPlayback { get; set; } = false;

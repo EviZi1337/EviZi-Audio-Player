@@ -1,3 +1,5 @@
+using Exiled.API.Enums;
+using System;
 using System.ComponentModel;
 using VoiceChat;
 
@@ -43,4 +45,21 @@ public sealed class AudioZoneConfig
 
     [Description("If true, the trigger plays only once per player per round.")]
     public bool TriggerOncePerRound { get; set; } = false;
+
+    public RoomType? ParsedRoomType { get; private set; }
+    public ZoneType? ParsedZoneType { get; private set; }
+    public bool EnumsParsed { get; private set; }
+
+    public void ParseEnums()
+    {
+        ParsedRoomType = null;
+        ParsedZoneType = null;
+        EnumsParsed = true;
+
+        if (!string.IsNullOrWhiteSpace(RoomType) && Enum.TryParse(RoomType, out RoomType roomType))
+            ParsedRoomType = roomType;
+
+        if (!string.IsNullOrWhiteSpace(AmbientZone) && Enum.TryParse(AmbientZone, out ZoneType zoneType))
+            ParsedZoneType = zoneType;
+    }
 }

@@ -3,6 +3,8 @@ using EviAudio.API;
 using EviAudio.Other;
 using Exiled.Permissions.Extensions;
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace EviAudio.Commands.SubCommands;
@@ -12,7 +14,7 @@ public class Play : ICommand, IUsageProvider
     public string Command => "play";
     public string[] Aliases => ["playback", "replay"];
     public string Description => "Play a file on a bot.";
-    public string[] Usage => ["Bot ID", "Path"];
+    public string[] Usage => ["Bot ID", "Path", "[--start seconds]", "[--end seconds]"];
 
     public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
     {
@@ -24,7 +26,7 @@ public class Play : ICommand, IUsageProvider
 
         if (arguments.Count < 2)
         {
-            response = "Usage: audio play {Bot ID} {Path}";
+            response = "Usage: audio play {Bot ID} {Path} [--start seconds] [--end seconds]";
             return false;
         }
 
@@ -41,8 +43,36 @@ public class Play : ICommand, IUsageProvider
             return false;
         }
 
-        string path = Extensions.PathCheck(string.Join(" ", arguments.Skip(1)));
-        bot.PlayFile(path);
+        var pathParts = new List<string>();
+        TimeSpan? startAt = null;
+        TimeSpan? endAt = null;
+
+        for (int i = 1; i < arguments.Count; i++)
+        {
+            string arg = arguments.At(i);
+            if ((arg.Equals("--start", StringComparison.OrdinalIgnoreCase) || arg.Equals("start", StringComparison.OrdinalIgnoreCase))
+                && i + 1 < arguments.Count
+                && double.TryParse(arguments.At(i + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out double startSeconds))
+            {
+                startAt = TimeSpan.FromSeconds(Math.Max(0, startSeconds));
+                i++;
+                continue;
+            }
+
+            if ((arg.Equals("--end", StringComparison.OrdinalIgnoreCase) || arg.Equals("end", StringComparison.OrdinalIgnoreCase))
+                && i + 1 < arguments.Count
+                && double.TryParse(arguments.At(i + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out double endSeconds))
+            {
+                endAt = TimeSpan.FromSeconds(Math.Max(0, endSeconds));
+                i++;
+                continue;
+            }
+
+            pathParts.Add(arg);
+        }
+
+        string path = Extensions.PathCheck(string.Join(" ", pathParts));
+        bot.PlayFile(path, startAt: startAt, endAt: endAt);
         response = $"Bot {id}: playing '{path}' on channel {bot.VoiceChatChannel}.";
         return true;
     }

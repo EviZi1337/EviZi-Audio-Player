@@ -46,16 +46,20 @@ public class Speaker : ICommand, IUsageProvider
             "destroyall" or "clear" => DestroyAll(out response),
             "list" or "ls" => List(out response),
             "play" => Play(args, out response),
+            "crossfade" or "xfade" => Crossfade(args, out response),
             "stop" => Stop(args, out response),
             "enqueue" or "queue" => Enqueue(args, out response),
+            "seek" => Seek(args, out response),
             "loop" => SetLoop(args, out response),
             "volume" or "vol" => SetVolume(args, out response),
+            "playervolume" or "pvol" or "pv" => SetPlayerVolume(args, out response),
             "fade" => Fade(args, out response),
             "pitch" or "pt" => SetPitch(args, out response),
             "mindist" or "mind" => SetMinDist(args, out response),
             "maxdist" or "maxd" => SetMaxDist(args, out response),
             "pos" or "move" or "position" => SetPos(args, out response),
             "rot" or "rotate" or "rotation" => SetRot(args, out response),
+            "follow" or "attach" => Follow(args, out response),
             "spatial" => SetSpatial(args, out response),
             "lifetime" or "life" or "lt" => SetLifetime(args, out response),
             "viz" or "visualize" => Visualize(args, out response),
@@ -159,7 +163,7 @@ public class Speaker : ICommand, IUsageProvider
         if (p == null) return false;
 
         int id = p.RegistryId;
-        UnityEngine.Object.Destroy(p.gameObject);
+        p.DestroySelf();
         response = $"Speaker #{id} destroyed.";
         return true;
     }
@@ -170,7 +174,7 @@ public class Speaker : ICommand, IUsageProvider
         if (count == 0) { response = "No active speakers."; return true; }
 
         foreach (var kvp in SpatialAudioRegistry.All.ToList())
-            try { UnityEngine.Object.Destroy(kvp.Value.gameObject); } catch { }
+            try { kvp.Value.DestroySelf(); } catch { }
 
         response = $"Destroyed {count} speaker(s).";
         return true;
@@ -220,13 +224,44 @@ public class Speaker : ICommand, IUsageProvider
         if (args.Count > 3 && bool.TryParse(args.At(args.Count - 1), out bool lv))
             loop = lv;
 
-        if (!File.Exists(Extensions.PathCheck(args.At(1))))
+        if (!PcmDecoder.IsUrl(file) && !File.Exists(Extensions.PathCheck(args.At(1))))
         {
             file = Extensions.PathCheck(string.Join(" ", args.Skip(1)));
         }
 
         p.Play(file, vol, loop);
         response = $"Speaker #{p.RegistryId}: playing '{Path.GetFileName(file)}' vol={vol:F2} loop={loop}.";
+        return true;
+    }
+
+    private static bool Crossfade(ArraySegment<string> args, out string response)
+    {
+        if (args.Count < 2) { response = "Usage: audio speaker crossfade <ID> <file> [volume:0-1] [loop:true/false]"; return false; }
+
+        var p = GetPlayer(args.At(0), out response);
+        if (p == null) return false;
+
+        float vol = p.Volume;
+        bool loop = p.Loop;
+        int pathEnd = args.Count;
+
+        if (args.Count > 2 && bool.TryParse(args.At(args.Count - 1), out bool parsedLoop))
+        {
+            loop = parsedLoop;
+            pathEnd--;
+        }
+
+        if (pathEnd > 2 && ParseFloat(args.At(pathEnd - 1), out float parsedVolume, out string _))
+        {
+            vol = parsedVolume;
+            pathEnd--;
+        }
+
+        string file = string.Join(" ", args.Skip(1).Take(pathEnd - 1));
+        file = PcmDecoder.IsUrl(file) ? file : Extensions.PathCheck(file);
+
+        p.CrossfadeTo(file, vol, loop);
+        response = $"Speaker #{p.RegistryId}: crossfading to '{Path.GetFileName(file)}' vol={vol:F2} loop={loop}.";
         return true;
     }
 
@@ -276,6 +311,26 @@ public class Speaker : ICommand, IUsageProvider
         return true;
     }
 
+    private static bool Seek(ArraySegment<string> args, out string response)
+    {
+        if (args.Count < 2) { response = "Usage: audio speaker seek <ID> <seconds>"; return false; }
+
+        var p = GetPlayer(args.At(0), out response);
+        if (p == null) return false;
+
+        if (!ParseFloat(args.At(1), out float seconds, out response)) return false;
+        if (seconds < 0) { response = "Seconds must be >= 0."; return false; }
+
+        if (!p.SeekTo(TimeSpan.FromSeconds(seconds)))
+        {
+            response = "Seek failed. The track may not be loaded yet or FFmpeg could not reopen the stream.";
+            return false;
+        }
+
+        response = $"Speaker #{p.RegistryId}: seeked to {TimeSpan.FromSeconds(seconds):m\\:ss}.";
+        return true;
+    }
+
     private static bool SetLoop(ArraySegment<string> args, out string response)
     {
         if (args.Count < 2) { response = "Usage: audio speaker loop <ID> <true/false>"; return false; }
@@ -287,6 +342,24 @@ public class Speaker : ICommand, IUsageProvider
 
         p.Loop = loop;
         response = $"Speaker #{p.RegistryId}: loop = {loop}.";
+        return true;
+    }
+
+    private static bool SetPlayerVolume(ArraySegment<string> args, out string response)
+    {
+        if (args.Count < 3) { response = "Usage: audio speaker playervolume <ID> <player> <0-100>"; return false; }
+
+        var p = GetPlayer(args.At(0), out response);
+        if (p == null) return false;
+
+        var player = Player.Get(args.At(1));
+        if (player == null) { response = "Player not found."; return false; }
+
+        if (!ParseFloat(args.At(2), out float vol, out response)) return false;
+        if (vol < 0 || vol > 100) { response = "Volume must be 0-100."; return false; }
+
+        p.SetPlayerVolume(player.Id, vol * 0.01f);
+        response = $"Speaker #{p.RegistryId}: personal volume for {player.Nickname} set to {vol:F0}%.";
         return true;
     }
 
@@ -398,6 +471,32 @@ public class Speaker : ICommand, IUsageProvider
         return true;
     }
 
+    private static bool Follow(ArraySegment<string> args, out string response)
+    {
+        if (args.Count < 2) { response = "Usage: audio speaker follow <ID> <player|stop>"; return false; }
+
+        var p = GetPlayer(args.At(0), out response);
+        if (p == null) return false;
+
+        if (args.At(1).Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            p.DetachFrom();
+            response = $"Speaker #{p.RegistryId}: follow stopped.";
+            return true;
+        }
+
+        var player = Player.Get(args.At(1));
+        if (player == null || !player.IsConnected || player.ReferenceHub == null)
+        {
+            response = "Player not found or not connected.";
+            return false;
+        }
+
+        p.AttachTo(player.ReferenceHub.transform);
+        response = $"Speaker #{p.RegistryId}: following {player.Nickname}.";
+        return true;
+    }
+
     private static bool SetSpatial(ArraySegment<string> args, out string response)
     {
         if (args.Count < 2) { response = "Usage: audio speaker spatial <ID> <true/false>"; return false; }
@@ -479,6 +578,8 @@ public class Speaker : ICommand, IUsageProvider
         sb.AppendLine($"  Pitch:      {p.PitchShift:F1} semitones");
         sb.AppendLine($"  Lifetime:   {(p.Lifetime <= 0 ? "permanent" : $"{p.Lifetime:F1}s")}");
         sb.AppendLine($"  Playing:    {(p.IsPlaying ? Path.GetFileName(p.CurrentFile) : "idle")}");
+        sb.AppendLine($"  Position:   {p.Position:m\\:ss} / {(p.Duration <= TimeSpan.Zero ? "--:--" : p.Duration.ToString(@"m\:ss"))}");
+        sb.AppendLine($"  Listeners:  {p.GetListenerCount()}");
 
         response = sb.ToString();
         return true;
@@ -497,6 +598,8 @@ public class Speaker : ICommand, IUsageProvider
                "    Create a new 3D speaker at world coordinates.\n\n" +
                "  <b>play</b> <ID> <file> [volume] [loop]\n" +
                "    Play an audio file on a speaker.\n\n" +
+               "  <b>crossfade</b> <ID> <file> [volume] [loop]\n" +
+               "    Crossfade into another track.\n\n" +
                "  <b>stop</b> <ID>\n" +
                "    Stop playback on a speaker.\n\n" +
                "  <b>enqueue</b> <ID> <file> [volume] [loop]\n" +
@@ -507,12 +610,17 @@ public class Speaker : ICommand, IUsageProvider
                "    Set speaker volume.\n\n" +
                "  <b>fade</b> <ID> <target vol 0-1> <duration seconds>\n" +
                "    Smoothly change volume.\n\n" +
+               "  <b>seek</b> <ID> <seconds>\n" +
+               "    Seek local decoded playback.\n\n" +
+               "  <b>playervolume</b> <ID> <player> <0-100>\n" +
+               "    Set personal volume for one listener.\n\n" +
                "  <b>pitch</b> <ID> <semitones -24..24>\n" +
                "    Pitch shift (applies on next track load).\n\n" +
                "  <b>mindist</b> <ID> <distance> — Set minimum audible distance.\n" +
                "  <b>maxdist</b> <ID> <distance> — Set maximum audible distance.\n" +
                "  <b>pos</b> <ID> <x> <y> <z> — Move speaker to world position.\n" +
                "  <b>rot</b> <ID> <x> <y> <z> — Set speaker rotation (Euler angles).\n" +
+               "  <b>follow</b> <ID> <player|stop> — Attach speaker to a player.\n" +
                "  <b>spatial</b> <ID> <true/false> — Toggle 3D vs global audio.\n" +
                "  <b>lifetime</b> <ID> <seconds> — Auto-destroy after N seconds (0 = off).\n" +
                "  <b>viz</b> [ID|all] [duration] — Show radius spheres.\n" +

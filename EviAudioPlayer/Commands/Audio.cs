@@ -21,18 +21,24 @@ public class AudioCommand : ParentCommand
     public sealed override void LoadGeneratedCommands()
     {
         RegisterCommand(new Add());
+        RegisterCommand(new Crossfade());
+        RegisterCommand(new Diagnose());
         RegisterCommand(new Enqueue());
         RegisterCommand(new Fade());
+        RegisterCommand(new Follow());
         RegisterCommand(new Folder());
+        RegisterCommand(new Help(this));
         RegisterCommand(new Kick());
         RegisterCommand(new Loop());
         RegisterCommand(new Nickname());
         RegisterCommand(new Pause());
         RegisterCommand(new PFP());
+        RegisterCommand(new PlayerVolume());
         RegisterCommand(new Pitch());
         RegisterCommand(new Play());
         RegisterCommand(new QueueCmd());
         RegisterCommand(new Scene());
+        RegisterCommand(new Seek());
         RegisterCommand(new Skip());
         RegisterCommand(new Speaker());
         RegisterCommand(new SPFP());
@@ -66,14 +72,15 @@ public class AudioCommand : ParentCommand
     private static readonly (string group, string[] cmds)[] Groups =
     [
         ("BOT MANAGEMENT", ["add", "kick", "status"]),
-        ("PLAYBACK", ["play", "folder", "stop", "pause", "skip", "loop", "volume", "fade", "pitch", "voicechannel"]),
+        ("PLAYBACK", ["play", "folder", "stop", "pause", "skip", "seek", "crossfade", "loop", "volume", "fade", "pitch", "voicechannel"]),
         ("QUEUE", ["enqueue", "queue"]),
-        ("TARGETING", ["playfromplayers", "stopplayfromplayers"]),
+        ("TARGETING", ["playfromplayers", "stopplayfromplayers", "playervolume", "follow"]),
         ("SCENES", ["scene"]),
         ("SPATIAL SPEAKERS", ["speaker", "visualize"]),
         ("BOT APPEARANCE", ["nickname"]),
+        ("DIAGNOSTICS", ["help", "diagnose"]),
     ];
-    //fucking appendline, i need symbols..
+
     private string BuildHelp(ICommandSender sender)
     {
         var sb = new StringBuilder();
@@ -90,7 +97,7 @@ public class AudioCommand : ParentCommand
         foreach (var (group, names) in Groups)
         {
             var allowed = names
-                .Where(n => cmdMap.ContainsKey(n) && sender.CheckPermission($"audioplayer.{n}"))
+                .Where(cmdMap.ContainsKey)
                 .Select(n => cmdMap[n])
                 .ToList();
 
@@ -121,5 +128,25 @@ public class AudioCommand : ParentCommand
         sb.AppendLine(Col(C_DIM, "  Permissions prefix: audioplayer.<command>"));
 
         return sb.ToString();
+    }
+
+    private sealed class Help : ICommand
+    {
+        private readonly AudioCommand _owner;
+
+        public Help(AudioCommand owner)
+        {
+            _owner = owner;
+        }
+
+        public string Command => "help";
+        public string[] Aliases => ["commands", "?"];
+        public string Description => "Show all EviAudio commands.";
+
+        public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+        {
+            response = _owner.BuildHelp(sender);
+            return true;
+        }
     }
 }

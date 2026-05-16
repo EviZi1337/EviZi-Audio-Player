@@ -15,6 +15,7 @@ public sealed class AudioZoneManager
 {
     private readonly List<SpatialAudioPlayer> _ambientPlayers = new();
     private readonly HashSet<string> _triggeredPlayers = new();
+    private bool _disposed;
 
     public AudioZoneManager()
     {
@@ -24,6 +25,10 @@ public sealed class AudioZoneManager
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         Exiled.Events.Handlers.Player.RoomChanged -= OnRoomChanged;
         Exiled.Events.Handlers.Server.RoundEnded -= OnRoundEnded;
         CleanupAmbient();
@@ -31,12 +36,17 @@ public sealed class AudioZoneManager
 
     public void SpawnAmbientSpeakers()
     {
+        if (_disposed)
+            return;
+
         CleanupAmbient();
 
         if (Plugin.Instance?.Config?.AudioZones == null) return;
 
         foreach (var zone in Plugin.Instance.Config.AudioZones)
         {
+            zone.ParseEnums();
+
             if (string.IsNullOrEmpty(zone.AmbientFile)) continue;
 
             string path = Extensions.PathCheck(zone.AmbientFile);
@@ -46,8 +56,21 @@ public sealed class AudioZoneManager
                 continue;
             }
 
+            int maxPerZone = Plugin.Instance.Config.MaxAmbientSpeakersPerZone;
+            int spawnedForZone = 0;
+
             foreach (var room in GetMatchingRooms(zone))
             {
+                int maxActive = Plugin.Instance.Config.MaxActiveSpeakers;
+                if (maxActive > 0 && SpatialAudioRegistry.All.Count >= maxActive)
+                {
+                    Log.Warn($"AudioZoneManager: active speaker limit reached ({maxActive}).");
+                    break;
+                }
+
+                if (maxPerZone > 0 && spawnedForZone >= maxPerZone)
+                    break;
+
                 var player = SpatialAudioPlayer.Create(
                     room.Position + Vector3.up,
                     zone.AmbientVolume,
@@ -60,6 +83,7 @@ public sealed class AudioZoneManager
                 player.PitchShift = zone.AmbientPitchShift;
                 player.Play(path, zone.AmbientVolume, true);
                 _ambientPlayers.Add(player);
+                spawnedForZone++;
             }
         }
 
@@ -68,11 +92,17 @@ public sealed class AudioZoneManager
 
     private void OnRoomChanged(RoomChangedEventArgs ev)
     {
+        if (_disposed)
+            return;
+
         if (ev.Player == null || ev.Player.IsNPC || ev.NewRoom == null) return;
         if (Plugin.Instance?.Config?.AudioZones == null) return;
 
         foreach (var zone in Plugin.Instance.Config.AudioZones)
         {
+            if (!zone.EnumsParsed)
+                zone.ParseEnums();
+
             if (string.IsNullOrEmpty(zone.TriggerFile)) continue;
             if (!RoomMatches(ev.NewRoom, zone)) continue;
 
@@ -95,33 +125,34 @@ public sealed class AudioZoneManager
     private void OnRoundEnded(Exiled.Events.EventArgs.Server.RoundEndedEventArgs _)
     {
         _triggeredPlayers.Clear();
+        CleanupAmbient();
     }
 
     public void CleanupAmbient()
     {
         foreach (var player in _ambientPlayers)
-            try { UnityEngine.Object.Destroy(player.gameObject); } catch { }
+            try { player.DestroySelf(); } catch { }
         _ambientPlayers.Clear();
     }
 
     private static IEnumerable<Room> GetMatchingRooms(AudioZoneConfig zone)
     {
-        if (!string.IsNullOrWhiteSpace(zone.RoomType) && Enum.TryParse(zone.RoomType, out RoomType roomType))
-            return Room.List.Where(r => r.Type == roomType);
+        if (zone.ParsedRoomType.HasValue)
+            return Room.List.Where(r => r.Type == zone.ParsedRoomType.Value);
 
-        if (!string.IsNullOrWhiteSpace(zone.AmbientZone) && Enum.TryParse(zone.AmbientZone, out ZoneType zoneType))
-            return Room.List.Where(r => r.Zone == zoneType);
+        if (zone.ParsedZoneType.HasValue)
+            return Room.List.Where(r => r.Zone == zone.ParsedZoneType.Value);
 
         return Array.Empty<Room>();
     }
 
     private static bool RoomMatches(Room room, AudioZoneConfig zone)
     {
-        if (!string.IsNullOrWhiteSpace(zone.RoomType) && Enum.TryParse(zone.RoomType, out RoomType roomType))
-            return room.Type == roomType;
+        if (zone.ParsedRoomType.HasValue)
+            return room.Type == zone.ParsedRoomType.Value;
 
-        if (!string.IsNullOrWhiteSpace(zone.AmbientZone) && Enum.TryParse(zone.AmbientZone, out ZoneType zoneType))
-            return room.Zone == zoneType;
+        if (zone.ParsedZoneType.HasValue)
+            return room.Zone == zone.ParsedZoneType.Value;
 
         return false;
     }

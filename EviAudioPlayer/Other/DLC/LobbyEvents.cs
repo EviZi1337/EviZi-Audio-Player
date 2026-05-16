@@ -5,7 +5,7 @@ using static EviAudio.Plugin;
 
 namespace EviAudio.Other.DLC;
 
-internal sealed class LobbyEvents
+internal sealed class LobbyEvents : System.IDisposable
 {
     private AudioFile _currentAudioFile;
     private bool _firstPlayerJoined;
@@ -28,6 +28,12 @@ internal sealed class LobbyEvents
     {
         _currentAudioFile?.Stop();
         UnsubscribeTrack();
+        Cleanup();
+    }
+
+    public void Dispose()
+    {
+        _currentAudioFile?.Stop();
         Cleanup();
     }
 

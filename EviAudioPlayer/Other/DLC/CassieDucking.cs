@@ -42,7 +42,7 @@ internal sealed class CassieDucking
         if (_restoreHandle.IsRunning)
             Timing.KillCoroutines(_restoreHandle);
 
-        float cassieWordCount = ev.Words?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length ?? 3;
+        float cassieWordCount = ev.Words?.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length ?? 3;
         float estimatedDuration = cassieWordCount * 0.6f + 2f;
 
         _restoreHandle = Timing.CallDelayed(estimatedDuration, () =>

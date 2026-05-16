@@ -1,3 +1,4 @@
+using EviAudio.API;
 using EviAudio.API.Container;
 using EviAudio.API.Preset;
 using EviAudio.API.Spatial;
@@ -5,6 +6,7 @@ using EviAudio.Other;
 using EviAudio.Other.DLC;
 using Exiled.Events.EventArgs.Player;
 using System.Collections.Generic;
+using System.Linq;
 using static EviAudio.Plugin;
 
 namespace EviAudio;
@@ -14,6 +16,7 @@ internal sealed class EventHandler
     internal EventHandler()
     {
         Exiled.Events.Handlers.Player.Destroying += OnDestroying;
+        Exiled.Events.Handlers.Player.Left += OnLeft;
         Exiled.Events.Handlers.Map.Generated += OnGenerated;
         Exiled.Events.Handlers.Server.RoundStarted += OnRoundStarted;
     }
@@ -21,12 +24,15 @@ internal sealed class EventHandler
     internal void Dispose()
     {
         Exiled.Events.Handlers.Player.Destroying -= OnDestroying;
+        Exiled.Events.Handlers.Player.Left -= OnLeft;
         Exiled.Events.Handlers.Map.Generated -= OnGenerated;
         Exiled.Events.Handlers.Server.RoundStarted -= OnRoundStarted;
     }
 
     private static void OnDestroying(DestroyingEventArgs ev)
     {
+        CleanupPlayerData(ev.Player?.Id ?? -1);
+
         foreach (KeyValuePair<int, AudioPlayerBot> kvp in AudioPlayerList)
         {
             if (ReferenceEquals(kvp.Value.Player, ev.Player))
@@ -35,6 +41,11 @@ internal sealed class EventHandler
                 break;
             }
         }
+    }
+
+    private static void OnLeft(LeftEventArgs ev)
+    {
+        CleanupPlayerData(ev.Player?.Id ?? -1);
     }
 
     private static void OnGenerated()
@@ -48,8 +59,8 @@ internal sealed class EventHandler
             bot.SafeDestroy();
 
         AudioPlayerList.Clear();
+        ControllerIdPool.Clear();
 
-        // LobbyEvents self-destructs after first round, gotta revive it every new map been chasing this for four days straight, holy shit
         if (Instance.Config.SpecialEventsEnable && Plugin.LobbyEvents == null)
             Plugin.LobbyEvents = new LobbyEvents();
 
@@ -65,5 +76,17 @@ internal sealed class EventHandler
     private static void OnRoundStarted()
     {
         Plugin.RoundStartTime = System.DateTime.UtcNow;
+    }
+
+    private static void CleanupPlayerData(int playerId)
+    {
+        if (playerId < 0)
+            return;
+
+        foreach (var bot in AudioPlayerList.Values.ToList())
+            bot.RemovePlayerData(playerId);
+
+        foreach (var player in SpatialAudioRegistry.All.Values.ToList())
+            player?.RemovePlayerData(playerId);
     }
 }

@@ -14,6 +14,9 @@ namespace EviAudio.API.Container;
 public sealed class AudioPlayerBot
 {
     private BotAudioStreamer _streamer;
+    private CoroutineHandle _graceHandle;
+    private CoroutineHandle _followHandle;
+    private bool _graceScheduled;
 
     public int ID { get; }
     public string Name { get; }
@@ -21,6 +24,9 @@ public sealed class AudioPlayerBot
 
     public bool IsPlaying => _streamer != null && _streamer.IsPlaying;
     public bool IsSpawned => Player is Npc npc && npc.IsConnected;
+    public TimeSpan Position => _streamer?.Position ?? TimeSpan.Zero;
+    public TimeSpan Duration => _streamer?.Duration ?? TimeSpan.Zero;
+    public AudioTrackMetadata CurrentMetadata => _streamer?.CurrentMetadata ?? new AudioTrackMetadata();
 
     public event Action<string> OnTrackFinished
     {
@@ -72,6 +78,12 @@ public sealed class AudioPlayerBot
 
     public string CurrentTrack => _streamer?.CurrentPlay ?? string.Empty;
     public HashSet<int> BroadcastTo => _streamer?.BroadcastTo;
+    public Dictionary<int, float> PlayerVolumes => _streamer?.PlayerVolumes;
+    public Func<ReferenceHub, bool> Condition
+    {
+        get => _streamer?.Condition;
+        set { if (_streamer != null) _streamer.Condition = value; }
+    }
 
     private AudioPlayerBot(int id, string name, BotAudioStreamer streamer, Player player)
     {
@@ -95,21 +107,41 @@ public sealed class AudioPlayerBot
             return existing;
         }
 
-        Npc npc = Npc.Spawn(name, role, ignored);
-        npc.ReferenceHub.nicknameSync.MyNick = name;
-        npc.RankName = badgeText;
-        npc.RankColor = badgeColor;
+        if (!ControllerIdPool.TryReserve(id, $"bot:{name}"))
+        {
+            Log.Error($"Bot ID={id} conflicts with another audio controller.");
+            return null;
+        }
 
-        var go = new GameObject($"EviAudio.Bot.{id}");
-        go.hideFlags = HideFlags.DontUnloadUnusedAsset;
-        var streamer = go.AddComponent<BotAudioStreamer>();
-        streamer.Init(npc.ReferenceHub);
+        try
+        {
+            Npc npc = Npc.Spawn(name, role, ignored);
+            npc.ReferenceHub.nicknameSync.MyNick = name;
+            npc.RankName = badgeText;
+            npc.RankColor = badgeColor;
 
-        var bot = new AudioPlayerBot(id, name, streamer, npc);
-        Plugin.AudioPlayerList[id] = bot;
+            var go = new GameObject($"EviAudio.Bot.{id}");
+            go.hideFlags = HideFlags.DontUnloadUnusedAsset;
+            var streamer = go.AddComponent<BotAudioStreamer>();
+            streamer.Init(npc.ReferenceHub);
 
-        Log.Debug($"Bot '{name}' (ID={id}) spawned.");
-        return bot;
+            var bot = new AudioPlayerBot(id, name, streamer, npc);
+            if (!Plugin.AudioPlayerList.TryAdd(id, bot))
+            {
+                Object.Destroy(streamer.gameObject);
+                ControllerIdPool.Release(id);
+                Log.Error($"Bot ID={id} was reserved concurrently.");
+                return Plugin.AudioPlayerList.TryGetValue(id, out var raced) ? raced : null;
+            }
+
+            Log.Debug($"Bot '{name}' (ID={id}) spawned.");
+            return bot;
+        }
+        catch
+        {
+            ControllerIdPool.Release(id);
+            throw;
+        }
     }
 
     public void PlayFile(
@@ -119,7 +151,9 @@ public sealed class AudioPlayerBot
         VoiceChatChannel? channel = null,
         IEnumerable<int> targetPlayerIds = null,
         bool shuffle = false,
-        bool continueQueue = false)
+        bool continueQueue = false,
+        TimeSpan? startAt = null,
+        TimeSpan? endAt = null)
     {
         if (_streamer == null)
         {
@@ -127,28 +161,17 @@ public sealed class AudioPlayerBot
             return;
         }
 
-        string resolvedPath = Extensions.PathCheck(filePath);
-        if (!File.Exists(resolvedPath))
+        string resolvedPath = PcmDecoder.IsUrl(filePath) ? filePath : Extensions.PathCheck(filePath);
+        if (!PcmDecoder.IsUrl(resolvedPath) && !File.Exists(resolvedPath))
         {
             Log.Warn($"File not found: {resolvedPath}");
             return;
         }
 
-        volume = Math.Clamp(volume, 0f, 100f);
+        volume = AudioMath.Clamp(volume, 0f, 100f);
 
-        float graceDelay = Plugin.Instance?.Config?.RoundStartGraceDelay ?? 0f;
-        if (graceDelay > 0f && Plugin.RoundStartTime != DateTime.MinValue)
-        {
-            float elapsed = (float)(DateTime.UtcNow - Plugin.RoundStartTime).TotalSeconds;
-            float remaining = graceDelay - elapsed;
-            if (remaining > 0f)
-            {
-                Log.Debug($"Grace-delay {remaining:F2}s before '{Path.GetFileName(resolvedPath)}'.");
-                Timing.CallDelayed(remaining,
-                    () => PlayFile(filePath, volume, loop, channel, targetPlayerIds, shuffle, continueQueue));
-                return;
-            }
-        }
+        if (ShouldDelayForGrace(resolvedPath, volume, loop, channel, targetPlayerIds, shuffle, continueQueue, startAt, endAt))
+            return;
 
         _streamer.Stop(clearQueue: true);
 
@@ -164,7 +187,7 @@ public sealed class AudioPlayerBot
                 _streamer.BroadcastTo.Add(pid);
 
         _streamer.Enqueue(resolvedPath);
-        _streamer.Play();
+        _streamer.Play(startAt, endAt);
 
         Log.Debug($"▶ {Path.GetFileName(resolvedPath)} ch={_streamer.Channel} vol={volume} loop={loop}");
     }
@@ -191,7 +214,7 @@ public sealed class AudioPlayerBot
         _streamer.Stop(clearQueue: true);
 
         if (channel.HasValue) _streamer.Channel = channel.Value;
-        _streamer.Volume = Math.Clamp(volume, 0f, 100f);
+        _streamer.Volume = AudioMath.Clamp(volume, 0f, 100f);
         _streamer.ContinueAfterTrack = true;
         _streamer.Shuffle = shuffle;
 
@@ -224,7 +247,7 @@ public sealed class AudioPlayerBot
         _streamer.Stop(clearQueue: true);
 
         if (channel.HasValue) _streamer.Channel = channel.Value;
-        _streamer.Volume = Math.Clamp(volume, 0f, 100f);
+        _streamer.Volume = AudioMath.Clamp(volume, 0f, 100f);
         _streamer.ContinueAfterTrack = true;
 
         _streamer.BroadcastTo.Clear();
@@ -238,27 +261,100 @@ public sealed class AudioPlayerBot
 
     public void Enqueue(string filePath, int position = -1)
     {
-        string resolvedPath = Extensions.PathCheck(filePath);
-        if (!File.Exists(resolvedPath))
+        string resolvedPath = PcmDecoder.IsUrl(filePath) ? filePath : Extensions.PathCheck(filePath);
+        if (!PcmDecoder.IsUrl(resolvedPath) && !File.Exists(resolvedPath))
         {
             Log.Warn($"Enqueue: file not found '{resolvedPath}'.");
             return;
         }
+
         _streamer?.Enqueue(resolvedPath, position);
+    }
+
+    public void InsertNext(string filePath)
+    {
+        string resolvedPath = PcmDecoder.IsUrl(filePath) ? filePath : Extensions.PathCheck(filePath);
+        if (!PcmDecoder.IsUrl(resolvedPath) && !File.Exists(resolvedPath))
+        {
+            Log.Warn($"InsertNext: file not found '{resolvedPath}'.");
+            return;
+        }
+
+        _streamer?.InsertNext(resolvedPath);
     }
 
     public void Skip() => _streamer?.Skip();
 
     public List<string> GetQueue() => _streamer?.GetQueue() ?? new List<string>();
 
+    public void ClearQueue() => _streamer?.ClearQueue();
+
+    public void ShuffleQueue() => _streamer?.ShuffleQueue();
+
+    public bool MoveQueueItem(int from, int to) => _streamer?.MoveQueueItem(from, to) ?? false;
+
+    public bool RemoveQueueAt(int index) => _streamer?.RemoveQueueAt(index) ?? false;
+
+    public int RemoveQueueByPath(string path) => _streamer?.RemoveQueueByPath(path) ?? 0;
+
     public void FadeTo(float targetVolume, float duration) => _streamer?.FadeTo(targetVolume, duration);
+
+    public bool SeekTo(TimeSpan position) => _streamer?.SeekTo(position) ?? false;
+
+    public void SetPlayerVolume(int playerId, float volume) => _streamer?.SetPlayerVolume(playerId, volume);
+
+    public void RemovePlayerData(int playerId) => _streamer?.RemovePlayerData(playerId);
+
+    public int GetListenerCount() => _streamer?.GetListenerCount() ?? 0;
+
+    public void CrossfadeTo(string filePath, float volume = 100f, bool loop = false)
+    {
+        if (_streamer == null) return;
+
+        string resolved = PcmDecoder.IsUrl(filePath) ? filePath : Extensions.PathCheck(filePath);
+        if (!PcmDecoder.IsUrl(resolved) && !File.Exists(resolved))
+        {
+            Log.Warn($"CrossfadeTo: file not found '{resolved}'.");
+            return;
+        }
+
+        _streamer.CrossfadeTo(resolved, AudioMath.Clamp(volume, 0f, 100f), loop);
+    }
+
+    public void FollowPlayer(Player target, float interval = 0.1f)
+    {
+        StopFollowing();
+
+        if (target == null)
+            return;
+
+        _followHandle = Timing.RunCoroutine(FollowCoroutine(target, Math.Max(0.02f, interval)));
+    }
+
+    public void StopFollowing()
+    {
+        if (_followHandle.IsRunning)
+            Timing.KillCoroutines(_followHandle);
+    }
 
     public void PlayIntercom(string filePath, float volume = 100f, bool loop = false)
         => PlayFile(filePath, volume, loop, VoiceChatChannel.Intercom);
 
     public void StopAudio(bool clearQueue = true)
     {
-        try { _streamer?.Stop(clearQueue); } catch { }
+        if (_graceHandle.IsRunning)
+            Timing.KillCoroutines(_graceHandle);
+
+        _graceScheduled = false;
+
+        try
+        {
+            _streamer?.Stop(clearQueue);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"StopAudio failed for bot '{Name}' (ID={ID}): {ex}");
+        }
     }
 
     internal void Duck(float duckVolume, float fadeTime) => _streamer?.Duck(duckVolume, fadeTime);
@@ -267,19 +363,25 @@ public sealed class AudioPlayerBot
 
     public void HandleExternalNpcDestroy()
     {
+        StopFollowing();
+
         if (_streamer != null)
         {
             _streamer.Stop(clearQueue: true);
             Object.Destroy(_streamer.gameObject);
             _streamer = null;
         }
+
+        Plugin.AudioPlayerList.TryRemove(ID, out _);
+        ControllerIdPool.Release(ID);
         Player = null;
         Log.Debug($"Bot '{Name}' (ID={ID}): NPC destroyed externally.");
     }
 
     public void SafeDestroy()
     {
-        Plugin.AudioPlayerList.Remove(ID);
+        StopFollowing();
+        Plugin.AudioPlayerList.TryRemove(ID, out _);
         StopAudio(clearQueue: true);
 
         if (Player is Npc npc)
@@ -290,8 +392,64 @@ public sealed class AudioPlayerBot
             Object.Destroy(_streamer.gameObject);
             _streamer = null;
         }
+
+        ControllerIdPool.Release(ID);
         Player = null;
 
         Log.Debug($"Bot '{Name}' (ID={ID}): destroyed.");
+    }
+
+    private bool ShouldDelayForGrace(
+        string resolvedPath,
+        float volume,
+        bool loop,
+        VoiceChatChannel? channel,
+        IEnumerable<int> targetPlayerIds,
+        bool shuffle,
+        bool continueQueue,
+        TimeSpan? startAt,
+        TimeSpan? endAt)
+    {
+        float graceDelay = Plugin.Instance?.Config?.RoundStartGraceDelay ?? 0f;
+        if (graceDelay <= 0f || Plugin.RoundStartTime == DateTime.MinValue)
+            return false;
+
+        float elapsed = (float)(DateTime.UtcNow - Plugin.RoundStartTime).TotalSeconds;
+        float remaining = graceDelay - elapsed;
+        if (remaining <= 0f)
+            return false;
+
+        if (_graceHandle.IsRunning)
+            Timing.KillCoroutines(_graceHandle);
+
+        int[] targets = targetPlayerIds == null ? null : new List<int>(targetPlayerIds).ToArray();
+        _graceScheduled = true;
+        Log.Debug($"Grace-delay {remaining:F2}s before '{Path.GetFileName(resolvedPath)}'.");
+
+        _graceHandle = Timing.CallDelayed(remaining, () =>
+        {
+            _graceScheduled = false;
+            PlayFile(resolvedPath, volume, loop, channel, targets, shuffle, continueQueue, startAt, endAt);
+        });
+
+        return _graceScheduled;
+    }
+
+    private IEnumerator<float> FollowCoroutine(Player target, float interval)
+    {
+        while (_streamer != null && Player != null && target != null && target.ReferenceHub != null && target.IsConnected)
+        {
+            try
+            {
+                Player.Position = target.Position;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"FollowPlayer failed for bot '{Name}' (ID={ID}): {ex.Message}");
+                yield break;
+            }
+
+            yield return Timing.WaitForSeconds(interval);
+        }
     }
 }

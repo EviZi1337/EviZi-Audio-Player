@@ -163,11 +163,16 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="API\AudioClipCache.cs"/>
     <Compile Include="API\AudioClipData.cs"/>
     <Compile Include="API\AudioClipPlayback.cs"/>
     <Compile Include="API\AudioController.cs"/>
+    <Compile Include="API\AudioMath.cs"/>
+    <Compile Include="API\AudioPcmStream.cs"/>
+    <Compile Include="API\AudioTrackMetadata.cs"/>
     <Compile Include="API\Container\AudioPlayerBot.cs"/>
     <Compile Include="API\Container\BotAudioStreamer.cs"/>
+    <Compile Include="API\ControllerIdPool.cs"/>
     <Compile Include="API\EviAudioAPI.cs"/>
     <Compile Include="API\PcmDecoder.cs"/>
     <Compile Include="API\Pitchshifter.cs"/>
@@ -178,18 +183,23 @@
     <Compile Include="API\Zone\AudioZoneManager.cs"/>
     <Compile Include="Commands\Audio.cs"/>
     <Compile Include="Commands\SubCommands\Add.cs"/>
+    <Compile Include="Commands\SubCommands\Crossfade.cs"/>
+    <Compile Include="Commands\SubCommands\Diagnose.cs"/>
     <Compile Include="Commands\SubCommands\Enqueue.cs"/>
     <Compile Include="Commands\SubCommands\Fade.cs"/>
+    <Compile Include="Commands\SubCommands\Follow.cs"/>
     <Compile Include="Commands\SubCommands\Folder.cs"/>
     <Compile Include="Commands\SubCommands\Kick.cs"/>
     <Compile Include="Commands\SubCommands\Loop.cs"/>
     <Compile Include="Commands\SubCommands\NickName.cs"/>
     <Compile Include="Commands\SubCommands\Pause.cs"/>
     <Compile Include="Commands\SubCommands\PFP.cs"/>
+    <Compile Include="Commands\SubCommands\PlayerVolume.cs"/>
     <Compile Include="Commands\SubCommands\Pitch.cs"/>
     <Compile Include="Commands\SubCommands\Play.cs"/>
     <Compile Include="Commands\SubCommands\QueueCmd.cs"/>
     <Compile Include="Commands\SubCommands\Scene.cs"/>
+    <Compile Include="Commands\SubCommands\Seek.cs"/>
     <Compile Include="Commands\SubCommands\Skip.cs"/>
     <Compile Include="Commands\SubCommands\Speaker.cs"/>
     <Compile Include="Commands\SubCommands\SPFP.cs"/>

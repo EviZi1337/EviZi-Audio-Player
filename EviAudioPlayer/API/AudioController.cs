@@ -31,7 +31,7 @@ public static class AudioController
     public static bool IsAudioPlayer(this Player player)
     {
         foreach (var bot in Plugin.AudioPlayerList.Values)
-            if (ReferenceEquals(bot.Player, player))
+            if (bot.Player != null && ReferenceEquals(bot.Player, player))
                 return true;
         return false;
     }

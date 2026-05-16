@@ -3,6 +3,7 @@ using EviAudio.API.Preset;
 using EviAudio.API.Spatial;
 using EviAudio.Other;
 using Exiled.API.Features;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VoiceChat;
@@ -56,12 +57,14 @@ public static class EviAudioAPI
         float volume = 100f,
         bool loop = false,
         VoiceChatChannel? channel = null,
-        IEnumerable<int> targetPlayerIds = null)
+        IEnumerable<int> targetPlayerIds = null,
+        TimeSpan? startAt = null,
+        TimeSpan? endAt = null)
     {
         if (!EnsureReady(out string err)) { Log.Error($"{err}"); return; }
         var bot = AudioController.TryGetAudioPlayerContainer(botId);
         if (bot == null) { Log.Warn($"Bot {botId} not found."); return; }
-        bot.PlayFile(filePath, volume, loop, channel, targetPlayerIds);
+        bot.PlayFile(filePath, volume, loop, channel, targetPlayerIds, startAt: startAt, endAt: endAt);
     }
 
     public static void PlayFolder(
@@ -95,6 +98,36 @@ public static class EviAudioAPI
     {
         if (!EnsureReady(out string err)) { Log.Error($"{err}"); return; }
         AudioController.TryGetAudioPlayerContainer(botId)?.FadeTo(targetVolume, duration);
+    }
+
+    public static bool Seek(int botId, TimeSpan position)
+    {
+        if (!EnsureReady(out string err)) { Log.Error($"{err}"); return false; }
+        return AudioController.TryGetAudioPlayerContainer(botId)?.SeekTo(position) ?? false;
+    }
+
+    public static void Crossfade(int botId, string filePath, float volume = 100f, bool loop = false)
+    {
+        if (!EnsureReady(out string err)) { Log.Error($"{err}"); return; }
+        AudioController.TryGetAudioPlayerContainer(botId)?.CrossfadeTo(filePath, volume, loop);
+    }
+
+    public static void SetPlayerVolume(int botId, int playerId, float volume)
+    {
+        if (!EnsureReady(out string err)) { Log.Error($"{err}"); return; }
+        AudioController.TryGetAudioPlayerContainer(botId)?.SetPlayerVolume(playerId, volume);
+    }
+
+    public static void FollowPlayer(int botId, Player player, float interval = 0.1f)
+    {
+        if (!EnsureReady(out string err)) { Log.Error($"{err}"); return; }
+        AudioController.TryGetAudioPlayerContainer(botId)?.FollowPlayer(player, interval);
+    }
+
+    public static void StopFollowing(int botId)
+    {
+        if (!EnsureReady(out string err)) { Log.Error($"{err}"); return; }
+        AudioController.TryGetAudioPlayerContainer(botId)?.StopFollowing();
     }
 
     public static SpatialAudioPlayer CreateSpatialPlayer(
